@@ -290,7 +290,3 @@ kubectl -n cert-manager get certificate wildcard-enricocc-tls -o yaml
 # Manually trigger sync (delete target to force re-replication)
 kubectl -n TARGET-NS delete secret wildcard-enricocc-tls
 ```
-
----
-
-**Status:** ✅ Fully automated | **Last updated:** March 2026
