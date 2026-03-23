@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-enricocc-tls
+  namespace: cert-manager
+spec:
+  secretName: wildcard-enricocc-tls
+  secretTemplate:
+    annotations:
+      replicator.v1.mittwald.de/replicate-to: "adguard,cattle-system,longhorn-system"
+  issuerRef:
+    name: letsencrypt-dns01-cloudflare
+    kind: ClusterIssuer
+  commonName: "*.enricocc.com"
+  dnsNames:
+    - "*.enricocc.com"
+    - enricocc.com

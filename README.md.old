@@ -1,0 +1,91 @@
+**Overview**: How to configure a cert-manager Certificate so its Secret is automatically replicated to other namespaces using `kubernetes-replicator` (Mittwald/Stakater-style).
+
+- **Scope**: instructions for adding a replicated TLS Secret to new namespaces, using `spec.secretTemplate` on `Certificate` (recommended), push-based annotations, and quick manual alternatives.
+
+**Install Replicator**: - : Install the replicator operator (Mittwald or Stakater) in the cluster. Example (Helm):
+
+- **Helm**: `helm repo add mittwald https://helm.mittwald.de && helm repo update`
+- **Install**: `helm upgrade --install kubernetes-replicator mittwald/kubernetes-replicator --namespace replicator --create-namespace`
+
+**Recommended (automatic)**: use `secretTemplate` in the `Certificate` so cert-manager creates the Secret with the replicator annotation.
+
+- **Edit Certificate**: add `spec.secretTemplate.annotations` to the Certificate. Example `cert-manager/wildcard-certificate.yaml`:
+
+  apiVersion: cert-manager.io/v1
+  kind: Certificate
+  metadata:
+    name: wildcard-enricocc-tls
+    namespace: cert-manager
+  spec:
+    secretName: wildcard-enricocc-tls
+    secretTemplate:
+      annotations:
+        replicator.v1.mittwald.de/replicate-to: "adguard,cattle-system"
+    issuerRef:
+      name: letsencrypt-dns01-cloudflare
+      kind: ClusterIssuer
+    commonName: "*.enricocc.com"
+    dnsNames:
+      - "*.enricocc.com"
+      - enricocc.com
+
+- **Apply**: `kubectl apply -f cert-manager/wildcard-certificate.yaml`
+
+**If the Secret already exists** (no downtime approach)
+
+- **Annotate existing Secret** (push the replication immediately):
+  - `kubectl -n cert-manager annotate secret wildcard-enricocc-tls replicator.v1.mittwald.de/replicate-to="adguard,cattle-system" --overwrite`
+- **Verify replication**:
+  - `kubectl -n adguard get secret wildcard-enricocc-tls -o yaml`
+  - `kubectl -n cattle-system get secret wildcard-enricocc-tls -o yaml`
+
+**If you want cert-manager to recreate the Secret with the template**
+
+- **Delete source Secret** (cert-manager will recreate it):
+  - `kubectl -n cert-manager delete secret wildcard-enricocc-tls`
+  - then verify: `kubectl -n cert-manager get secret wildcard-enricocc-tls -o yaml`
+
+**Pull-based alternative** (create empty target Secret that pulls from source)
+
+- In the target namespace create a Secret with the annotation `replicator.v1.mittwald.de/replicate-from: cert-manager/wildcard-enricocc-tls` and empty data keys for TLS secrets. Example:
+
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: wildcard-enricocc-tls
+    namespace: adguard
+    annotations:
+      replicator.v1.mittwald.de/replicate-from: cert-manager/wildcard-enricocc-tls
+  type: kubernetes.io/tls
+  data:
+    tls.crt: ""
+    tls.key: ""
+
+**Special cases & tips**
+
+- **TLS secret format**: ensure `type: kubernetes.io/tls` and keys `tls.crt` and `tls.key` exist (may be empty for pull-based).
+- **Strip labels**: to avoid other operators deleting replicated secrets (e.g., Strimzi) add `replicator.v1.mittwald.de/strip-labels: "true"` on source.
+- **OwnerReferences**: replicator removes ownerReferences by default; to keep them set `replicator.v1.mittwald.de/keep-owner-references: "true"`.
+- **Rene wal / Renewal**: when cert-manager renews the source secret, the replicator will update targets automatically.
+- **RBAC**: replicator requires read on source namespace and create/update on target namespaces. Verify clusterrole/serviceaccount values if install fails.
+- **Image pull issues**: if operator pods show `ImagePullBackOff`, mirror the operator image to an internal registry and update `image.repository`/`image.tag` or add `imagePullSecrets`.
+
+**Quick troubleshooting**
+
+- **Replicator logs**: `kubectl -n replicator logs deployment/kubernetes-replicator -f`
+- **Check annotations on source**: `kubectl -n cert-manager get secret wildcard-enricocc-tls -o yaml`
+- **Check if target exists**: `kubectl -n <target> get secret wildcard-enricocc-tls -o yaml`
+- **Ingress check**: confirm `secretName` in Ingress and controller logs if TLS not served:
+  - `kubectl -n <ingress-namespace> describe ingress <ingress-name>`
+  - `kubectl -n ingress-nginx logs -l app.kubernetes.io/name=ingress-nginx -f`
+
+**Where to edit**
+
+- Add/modify `cert-manager/wildcard-certificate.yaml` and apply, or use `kubectl patch` to add `secretTemplate` without downtime.
+
+**Cleanup**
+
+- If you created a temporary Job or manual resources for the annotation, remove them once the replication is working: `kubectl -n replicator delete job replicate-wildcard-annotation` and remove temp YAML files from the repo.
+
+---
+If you want, I can commit this README to the repo now and remove the temporary job YAML. Which do you prefer?

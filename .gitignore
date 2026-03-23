@@ -1,0 +1,22 @@
+# cert-manager - Secret e certificati
+
+# Secret reali (NON committare)
+secret.yaml
+*-secret.yaml
+!*-secretexample.yaml
+
+# Certificati
+*.crt
+*.key
+*.pem
+*.cer
+
+# Token Cloudflare
+cloudflare-token.yaml
+cloudflare-api-token.yaml
+
+# Log
+*.log
+
+# Backup certificati
+*.backup
