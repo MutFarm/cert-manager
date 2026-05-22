@@ -7,7 +7,7 @@ spec:
   secretName: wildcard-enricocc-tls
   secretTemplate:
     annotations:
-      replicator.v1.mittwald.de/replicate-to: "adguard,cattle-system,longhorn-system,immich"
+      replicator.v1.mittwald.de/replicate-to: "adguard,cattle-system,longhorn-system,immich,kube-prometheus-stack"
   issuerRef:
     name: letsencrypt-dns01-cloudflare
     kind: ClusterIssuer
